@@ -1,0 +1,149 @@
+centos7单机部署腾讯蓝鲸运维平台6.0.2
+一、环境准备
+1.配置腾讯yum源
+
+mv /etc/yum.repos.d/CentOS-Base.repo /etc/yum.repos.d/CentOS-Base.repo.backup
+
+mv /etc/yum.repos.d/epel.repo /etc/yum.repos.d/epel.repo.backup
+
+wget -O /etc/yum.repos.d/CentOS-Base.repo http://mirrors.cloud.tencent.com/repo/centos7_base.repo
+
+wget -O /etc/yum.repos.d/epel.repo http://mirrors.cloud.tencent.com/repo/epel-7.repo
+
+yum clean all && yum makecache
+2.关闭防火墙和selinux
+
+systemctl stop firewalld && systemctl disable firewalld
+
+setenforce 0　　或者　　sed -i 's/^SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config
+
+reboot
+3.安装脚本依赖 rsync 分发同步文件
+
+yum -y install rsync
+4.停止并禁用NetWorkManager
+
+systemctl stop NetworkManager && systemctl disable NetworkManager
+
+ 
+5.调整最大文件打开数
+
+ulimit -n  查看
+
+执行
+
+cat >> /etc/security/limits.conf << EOF
+> root soft nofile 102400
+> root hard nofile 102400
+> EOF
+6.多机部署需要确认时间同步，单机不需要
+
+date -s ""
+
+hwclock --systohc
+7.检查DNS配置文件
+
+vim /etc/resolv.conf
+
+除注释外的第一行添加 nameserver 127.0.0.1
+8.下载证书
+
+ip a 查看本MAC地址，到 https://bk.tencent.com/download_ssl/ 生成证书包 ssl_certificates.tar.gz
+二、安装部署
+1.将证书包和安装包上传至/data目录下
+
+ 
+2.解压相关资源包
+
+cd /data && tar xf bkce_src-6.0.2.tgz
+
+cd /data/src/ && for f in *gz ; do tar xf $f ; done
+
+install -d -m 755 /data/src/cert && tar xf /data/ssl_certificates.tar.gz -C /data/src/cert/ && chmod 644 /data/src/cert/*
+
+cp -a /data/src/yum /opt
+
+  
+3.自定义安装配置
+
+(1)vim /data/install/install.config　　#因为是单机部署，所有IP都一样，多机根据实际情况修改IP
+
+<你的IP> iam,ssm,usermgr,gse,license,redis,consul,es7,monitorv3(influxdb-proxy),monitorv3(monitor),monitorv3(grafana)
+<你的IP> nginx,consul,mongodb,rabbitmq,appo,influxdb(bkmonitorv3),monitorv3(transfer),fta,beanstalk
+<你的IP> paas,cmdb,job,mysql,zk(config),kafka(config),appt,consul,log(api),nodeman(nodeman)
+
+(2)对 install.config 中的主机配置中控机 ssh 登录免密，根据提示，依次输入每台机器的 root 密码　　#多机部署执行步骤
+
+bash /data/install/configure_ssh_without_pass
+4.初始化
+
+cd /data/install && ./bk_install common
+5.检查相关配置
+
+./health_check/check_bk_controller.sh
+6.部署全部组件
+
+cd /data/install && ./install_minibk -y
+
+(如果想要部署部分组件，执行 cd /data/install && ./install_minibk && ./bk_install paas && ./bk_install cmdb && ./bk_install job)
+三、访问蓝鲸
+
+根据 install/bin/04-final/global.env、install/bin/04-final/usermgr.env 里配置的 PaaS 域名(BK_PAAS_PUBLIC_ADDR)、账号 (BK_PAAS_ADMIN_USERNAME)、密码(BK_PAAS_ADMIN_PASSWORD)信息，登录访问(若域名没设置 DNS 解析，需配置本机 hosts).
+
+#配置本地hosts
+
+1.Windows 配置 用文本编辑器（如Notepad++）打开文件： C:WindowsSystem32driversetchosts 将以下内容复制到上述文件内，并将以下 IP 需更换为本机浏览器可以访问的 IP，然后保存。
+
+10.0.0.2 paas.bktencent.com cmdb.bktencent.com job.bktencent.com jobapi.bktencent.com
+
+10.0.0.3 nodeman.bktencent.com
+
+注意： 10.0.0.2 为 nginx 模块所在的机器，10.0.0.3 为 nodeman 模块所在的机器。IP 需更换为本机浏览器可以访问的 IP。查询模块所分布在机器的方式：
+
+grep -E "nginx|nodeman" /data/install/install.config
+
+    注意：如果遇到无法保存，请右键文件 hosts 并找到“属性” -> “安全”，然后选择你登陆的用户名，最后点击编辑，勾选“写入”即可。
+
+2.Linux / Mac OS 配置 将以下内容复制到 /etc/hosts 中，并将以下 IP 需更换为本机浏览器可以访问的 IP，然后保存。
+
+10.0.0.2 paas.bktencent.com cmdb.bktencent.com job.bktencent.com jobapi.bktencent.com
+
+10.0.0.3 nodeman.bktencent.com
+
+    #登录蓝鲸
+
+在web界面网址栏输入 http://paas.bktencent.com 或者 蓝鲸中控机 IP
+
+执行 grep -E "BK_PAAS_ADMIN_USERNAME|BK_PAAS_ADMIN_PASSWORD" /data/install/bin/04-final/usermgr.env 获取账号密码
+
+——————————————————————————————————————————————————
+参考文档
+
+蓝鲸官方文档　　https://bk.tencent.com/docs/document/6.0/127/7549
+
+ 
+
+——————————————————————————————————————————————————
+部分报错及解决方法
+
+1.报错No package mysql-community-client available
+
+执行　　cd /opt/yum && yum -y remove mariadb-libs && yum -y install mysql*
+
+查看状态　　systemctl status mysqld
+
+ 
+
+2.Stderr: Repository ******* is listed more than once in the configuration
+
+将 /etc/yum.repos.d/ 重复出现的模块所在的仓库备份掉 mv *.repo *.repo.bak
+
+mv CentOS-CR.repo CentOS-CR.repo.bak
+
+mv CentOS-fasttrack.repo CentOS-fasttrack.repo.bak
+
+mv CentOS-Media.repo CentOS-Media.repo.bak
+
+ 
+
+3.安装过程中Stderr显示创建系统启动项不用管
