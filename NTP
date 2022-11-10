@@ -1,0 +1,162 @@
+一、安装NTP
+1.1 yum安装
+
+yum -y install ntp
+
+1.2 离线安装
+
+# 离线RPM包下载地址： centos7 ntp rpm 安装包
+
+    # 或者，找一台本地可联网服务器，进行安装包的download
+    yum -y install ntp --downloadonly --downloaddir /root/ntp
+     
+    # 进入rpm包安装目录，执行如下命令
+    rpm -ivh *.rpm --force --nodeps
+     
+    #设置开机启动
+    #chkconfig ntpd on
+    systemctl enable ntpd  
+     
+    systemctl start ntpd
+     
+    systemctl status ntpd
+     
+    systemctl daemon-reload
+
+二、服务端配置（/etc/ntp.conf）
+
+    [root@localhost etc]# cat /etc/ntp.conf
+    # 然后添加这两行 ，意思是 允许IPV4 IPV6 查询 拒绝修改
+    restrict -4 default kod notrap nomodify   
+    restrict -6 default kod notrap nomodify 
+     
+    #  --------------- 其它配置方式 start ----------------- #
+    # 1.允许任何IP的客户机都可以进行时间同步
+    # restrict default nomodify
+     
+    # 只允许192.168.11.*网段的客户机进行时间同步 
+    # 在restrict default nomodify notrap noquery（表示默认拒绝所有IP的时间同步）之后增加一行：
+    # restrict 192.168.11.0 mask 255.255.255.0 nomodify
+     
+    # 只允许192.168.11.70机器修改本机时间
+    # restrict 192.168.11.70 nomodify notrap noquery
+     
+    # 允许上层机器10.173.24.27 进行修改本机时间
+    # restrict 10.173.24.27 nomodify notrap noquery
+    # ----------------- 其它配置方式 end ------------------- #
+     
+    # 添加修改上层时间服务器，如果能联通外网，则不需要修改，
+    # server 0.rhel.pool.ntp.org iburst
+    # server 1.rhel.pool.ntp.org iburst
+    # server 2.rhel.pool.ntp.org iburst
+    # server 3.rhel.pool.ntp.org iburst
+     
+    #如果联不通外网，则把上面几行注释，然后添加下面两行，意思是设置成时间服务器是自己
+    server 127.127.1.0  # local clock
+    fudge 127.127.1.0 stratum 8  # stratum: ntp stratum层 
+     
+    #stratum说明:
+    # 正常情况下stratum值范围“0~15”
+    # Stratum-2则从Stratum-1获取时间，Stratum-3从Stratum-2获取时间，以此类推，
+    # 但Stratum层的总数限制在15以内。所有这些服务器在逻辑上形成阶梯式的架构相互连接，
+    # 而Stratum-1的时间服务器是整个系统的基础
+     
+    # 其它配置方式：
+    # 配置上层时间服务器192.168.11.70
+    # server 192.168.11.70
+     
+    # ------------------------------------------------- #
+    # 参数详解：
+    #ignore  ：关闭所有的 NTP 联机服务
+    #nomodify：客户端不能更改服务端的时间参数，但是客户端可以通过服务端进行网络校时。
+    #notrust ：客户端除非通过认证，否则该客户端来源将被视为不信任子网
+    #noquery ：不提供客户端的时间查询：用户端不能使用ntpq，ntpc等命令来查询ntp服务器
+    #notrap ：不提供trap远端登陆：拒绝为匹配的主机提供模式 6 控制消息陷阱服务。
+              陷阱服务是 ntpdq 控制消息协议的子系统，用于远程事件日志记录程序。
+    #nopeer ：用于阻止主机尝试与服务器对等，并允许欺诈性服务器控制时钟
+    #kod ： 访问违规时发送 KoD 包。
+    #restrict -6 表示IPV6地址的权限设置。
+
+三、客户端配置（/etc/ntp.conf）
+
+    [root@localhost etc]# cat /etc/ntp.conf 
+    # 将原来的server配置全部注释
+    # 配置上层server(要同步的)，在这里配置的是实际的物理地址
+    server 10.173.24.27  
+    fudge 10.173.24.27 stratum 8 
+
+四、测试（ntpstat一般是过个5-10分钟才能同步）
+（1）服务器：
+
+    #配置文件完成，保存退出，启动/重启服务
+    [root@localhost etc]# service ntpd start
+     
+    #查询上级服务时间
+    [root@localhost etc]# ntpq -p
+         remote           refid      st t when poll reach   delay   offset  jitter
+    ==============================================================================
+    *LOCAL(0)        .LOCL.           8 l   36   64  377    0.000    0.000   0.000
+     
+    #查看时间同步状态 
+    [root@localhost etc]# ntpstat
+    synchronised to local net at stratum 9 
+       time correct to within 12 ms
+       polling server every 64 s
+
+（2）客户端：
+
+    [root@localhost etc]# ntpq -p
+         remote           refid      st t when poll reach   delay   offset  jitter
+    ==============================================================================
+    *10.173.24.27    LOCAL(0)         9 u   40   64  377    1.108    2.560   0.764
+     
+    [root@localhost etc]# ntpstat
+    synchronised to NTP server (10.173.24.27) at stratum 10 
+       time correct to within 461 ms
+       polling server every 64 s
+
+五、日志设置
+
+    [root@localhost sysconfig]# pwd
+    /etc/sysconfig
+     
+    [root@localhost sysconfig]#cat ntpd
+     
+    # Command line options for ntpd
+    OPTIONS="-g -l /var/log/ntpstats/ntpd.log"
+     
+    [root@localhost ntpstats]# service ntpd stop
+     
+    [root@localhost ntpstats]# service ntpd start 
+     
+    [root@localhost ntpstats]# service ntpd status
+     
+    [root@localhost ntpstats]# tail -200f /var/log/ntpstats/ntpd.log
+
+常用命令：
+
+    #查询已安装的ntp版本信息等
+    rpm -qa | grep ntp     
+     
+    #启动,停止, 重启, 查询ntp服务状态
+    service ntpd status    
+    service ntpd start      
+    service ntpd stop      
+    service ntpd restart   
+     
+    #查看ntp服务器与上层ntp的状态
+    ntpq -p     
+     
+    # 命令查看时间同步状态
+    ntpstat     
+     
+    # 服务器启动一般需要5-10分钟后才能成功连接和同步。所以，服务器刚启动的时候，一般是：
+    # ntpstat 
+      unsynchronised
+      time server re-starting
+      polling server every 64 s
+     
+    # 下面表示成功链接：
+      synchronised to NTP server (202.120.2.101) at stratum 4 
+      time correct to within 1192 ms
+      polling server every 64 s
