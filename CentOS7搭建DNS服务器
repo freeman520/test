@@ -1,0 +1,115 @@
+CentOS7搭建DNS服务器
+# 原理
+
+    使用开源的Bind服务来配置一个DNS服务器
+
+机器环境
+
+    CentOS7
+
+安装Bind服务
+
+yum -y install bind bind-libs bind-utils
+
+配置/etc/named.conf
+
+    修改如下
+
+options {
+        listen-on port 53 { any; };   
+        listen-on-v6 port 53 { ::1; };
+        directory       "/var/named";
+        dump-file       "/var/named/data/cache_dump.db";
+        statistics-file "/var/named/data/named_stats.txt";
+        memstatistics-file "/var/named/data/named_mem_stats.txt";
+        allow-query     { any; };
+
+        /*
+         - If you are building an AUTHORITATIVE DNS server, do NOT enable recursion.
+         - If you are building a RECURSIVE (caching) DNS server, you need to enable
+           recursion.
+         - If your recursive DNS server has a public IP address, you MUST enable access
+           control to limit queries to your legitimate users. Failing to do so will
+           cause your server to become part of large scale DNS amplification
+           attacks. Implementing BCP38 within your network would greatly
+           reduce such attack surface
+        */
+        recursion yes;
+
+        dnssec-enable yes;
+        dnssec-validation yes;
+
+        /* Path to ISC DLV key */
+        bindkeys-file "/etc/named.iscdlv.key";
+
+        managed-keys-directory "/var/named/dynamic";
+
+        pid-file "/run/named/named.pid";
+        session-keyfile "/run/named/session.key";
+};
+
+logging {
+        channel default_debug {
+                file "data/named.run";
+                severity dynamic;
+        };
+};
+
+zone "." IN {
+        type hint;
+        file "named.ca";
+};
+
+include "/etc/named.rfc1912.zones";
+include "/etc/named.root.key";
+
+修改/etc/named.rfc1912.zones添加DNS正反向解析规则
+
+// 正向解析
+zone "ns2250225.com" IN {
+        type master;
+        file "ns2250225.com.zone";
+        allow-update { none; };
+};
+
+// 反向解析
+zone "14.168.192.in-addr.arpa" IN {
+        type master;
+        file "192.168.14.zone";
+        allow-update { none; };
+};
+
+创建对应的配置文件
+
+    创建/var/named/ns2250225.com.zone
+
+$TTL 3600
+@     IN SOA ns.ns2250225.com. admin.ns2250225.com. (4 3600 3600 7200 7200)
+      IN NS ns
+ns    IN A  192.168.14.250
+www   IN A  192.168.14.251
+mail  IN A  192.168.14.252
+
+    创建/var/named/192.168.14.zone
+
+$TTL 3600
+@       IN      SOA     ns.ns2250225.com. admin.ns2250225.com. (4 3600 3600 7200 7200)
+        IN      NS      ns.ns2250225.com.
+250     IN      PTR     ns.ns2250225.com.
+251     IN      PTR     www.ns2250225.com.
+252     IN      PTR     mail.ns2250225.com.
+
+    修改文件权限：chmod 777 ns2250225.com.zone 192.168.14.zone
+
+重启Bind服务
+
+systemctl restart named.service
+
+测试正向解析
+
+nslookup www.ns2250225.com 192.168.14.250
+
+
+测试反向解析
+
+nslookup 192.168.14.251 192.168.14.250
