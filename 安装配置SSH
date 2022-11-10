@@ -1,0 +1,59 @@
+ CentOS 7 安装配置SSH
+
+SSH为 Secure Shell的缩写，由IETF的网络工作小（Network Working Group）所制定。SSH为建立在应用层和传输层基础上的安全协议。
+
+传统的网络服务程序，如FTP、POP和Telnet其本质上都是不安全的，因为它们在网络上用明文传送数据、用户账号和口令，很容易受到中间人（man-in-the-middle）攻击方式的攻击。就是存在另一个人或者一台机器冒充真正的服务器接收用户传送的数据，然后再冒充用户把数据发送给真正的服务器。
+
+而SSH是目前较可靠，专为远程登录会话和其他网络服务提供安全性的协议。利用SSH协议可以有效防止远程管理过程中的信息泄露问题。通过SSH可以对所有传输的数据进行加密，也能够防止DNS欺骗和IP欺骗。
+
+        查看当前的centos是否安装了openssh-server服务。默认安装openssh-server服务。（在root下操作示例）
+
+rpm -qa|grep -E "openssh"
+
+显示结果含有以下三个软件，则表示已经安装，否则需要安装缺失的软件
+
+openssh-server-7.4p1-22.el7_9.x86_64
+openssh-7.4p1-22.el7_9.x86_64
+openssh-clients-7.4p1-22.el7_9.x86_64
+
+如果存在这些文件，则可以跳过安装，直接进行远程连接。
+
+        安装openssh-server服务
+
+yum -y install openssh-server
+
+        配置OpenSSH服务(默认的配置已可以正常工作)
+        OpenSSH的主配置文件：/etc/ssh/sshd_config
+
+常见的配置选项：
+
+Port=22  # 设置SSH的端口号是22(默认端口号为22)
+
+Protocol 2  # 启用SSH版本2协议
+
+ListenAddress 192.168.0.222  # 设置服务监听的地址
+
+DenyUsers   user1 user2 foo  # 拒绝访问的用户(用空格隔开)
+
+AllowUsers  root osmond vivek  # 允许访问的用户(用空格隔开)
+
+PermitRootLogin  no  # 禁止root用户登陆
+
+PermitEmptyPasswords no  # 用户登陆需要密码认证
+
+PasswordAuthentication  yes  # 启用口令认证方式
+
+        启动ssh的服务
+
+systemctl start sshd.service
+
+        停止ssh的服务
+
+systemctl stop sshd.service
+
+        设置开机自动启动ssh服务
+
+systemctl enable sshd.service
+
+systemctl restart sshd.service
+
