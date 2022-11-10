@@ -1,0 +1,81 @@
+服务配置准备工作
+
+        关闭防火墙
+
+    [root@localhost ~]#systemctl stop firewalld
+
+        关闭核心防护
+
+    [root@localhost ~]#setenforce 0
+
+         挂载光盘
+
+    [root@localhost ~]#mount /dev/sr0 /mnt/
+
+        下载dhcp服务
+
+     [root@localhost ~]#yum -y install dhcp
+
+    [root@localhost ~]#rpm -qa | grep dhcp `
+
+    dhcp-4.2.5-83.el7.centos.1.x86_64
+
+    dhcp-common-4.2.5-83.el7.centos.1.x86_64
+
+    dhcp-libs-4.2.5-83.el7.centos.1.x86_64
+
+实验配置修改
+
+主要配置文件： /etc/dhcp/dhcpd.conf（查看/etc/dhcp/dhcpd.conf文件）
+
+复制/usr/share/doc/dhcp-4.2.5(版本不唯一)/dhcpd.conf.example到/etc/dhcp/dhcpd.con并覆盖：  cp /usr/share/doc/dhcp-4.2.5/dhcpd.conf.example /etc/dhcp/dhcpd.conf
+
+配置/etc/dhcp/dhcpd.conf文件
+
+    [root@localhost ~]#vim /etc/dhcp/dhcpd.conf
+
+    #设置全局配置参数
+
+    default-lease-time 21600;     #默认租约为 6 小时，单位为秒
+
+    max-lease-time 43200; #最大租约为 12 小时，单位为秒     
+
+    option domain-name "benet.com"; #指定默认域名
+
+    option domain-name-servers 202.106.0.20, 202.106.148.1; #指定 DNS 服务器地址
+
+    ddns-update-style none; #禁用 DNS 动态更新
+
+    #subnet网段声明（作用于整个子网段，部分配置参数优先级高于全局配置参数）
+
+    subnet 192.168.45.0 netmask 255.255.255.0 #声明要分配的网段地址
+
+    { range 192.168.45.10 192.168.45.20;#设置地址池
+
+    option routers 192.168.24.254;#指定默认网关地址 }
+
+    #host主机声明（给单机分配固定的IP地址）
+
+    host hostname { #指定需要分配固定IP地址的客户机名称
+
+            hardware ethernet 00:0C:29:3A:F5:6F; #指定该主机的 MAC地址
+
+             fixed-address 192.168.45.18; #指定保留给该主机的 IP地址
+
+    }
+
+ 启动dhcp服务
+
+    [root@localhost ~]#systemctl enable dhcpd ##开机自启dhcp服务
+
+    [root@localhost ~]#systemctl start dhcpd ##开启dhcp服务
+
+配置网卡（动态获取） 
+
+    [root@localhost ~]#vim /etc/sysconfig/network-scripts/ifcfg-ens33
+
+    BOOTPROTO=dhcp ##静态IP
+
+    ONBOOT=yes ##开启网卡
+
+在vmware中以便实验使用仅主机模式，把虚拟网络编辑器中仅主机模式网卡的使用本地dhcp服务将ip的地址分配给虚拟机。服务器和客户机要使用同一个网卡，在同一网段。 
