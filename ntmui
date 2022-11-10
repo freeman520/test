@@ -1,0 +1,11 @@
+但在新版的CentOS 7里，setuptool已经没有网络编辑组件了，取而代之的是NetworkManager Text User Interface，即nmtui。nmtui默认随系统标准安装，如果你使用最小化安装，可能没有该软件，使用下面的命令手动安装：
+
+    yum install NetworkManager-tui
+
+在命令行运行 nmtui：
+
+nmtui
+
+如果提示NetworkManager is not running，需要手动启动NetworkManager：
+
+systemctl start NetworkManager
