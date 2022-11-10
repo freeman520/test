@@ -1,0 +1,40 @@
+下载yum源：
+
+wget http://mirrors.163.com/.help/CentOS7-Base-163.repo
+
+3、修改源文件名（注意需要把之前的删除，或者改为.bak文件）
+
+ 
+
+    把之前的CentOS-Base.repo 备份
+
+mv CentOS-Base.repo CentOS-Base.repo.bak
+
+ 
+
+    把新下载的yum源重命名
+
+mv CentOS7-Base-163.repo CentOS-Base.repo
+
+4、运行makecache 生成缓存 使配置生效
+
+yum makecache
+
+5、验证yum源
+
+yum repolist
+
+
+查看是否有163的标识，有则证明配置国内163镜像源成功。
+6、运行 yum clean all (等同于 yum cleanheaders;yum cleanpackages);
+
+yum clean all
+
+
+yum 会把下载的软件包和header存储在cache中，而不自动删除。如果觉得占用磁盘空间，可以使用 yum clean 指令进行清除，更精确的用法是 yum clean headers 清除 header，yum clean packages清除下载的rpm包，yum clean all --全部清除。
+
+7、更新yum文件，全部更新软件包
+
+yum update
+
+至此，yum安装完成。
