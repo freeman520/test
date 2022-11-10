@@ -1,0 +1,146 @@
+环境
+
+① 系统：centos 7.9
+② Zabbix版本: 5.0
+③ Mysql版本:5.7.32 > (密码不符合安全策略点这里；> 忘记密码，拒绝登录点这里)
+④ 防火墙等安全策略该关就关！
+
+    关闭selinux #setenforce 0
+    记得防火墙加策略
+    firewall-cmd --zone=public --add-port=10050/tcp --permanent 以10050端口为例
+    zabbix server和zabbix agent所使用的10050、10051端口
+    firewall-cmd --reload 重新加载策略
+    firewall-cmd --list-port 再次查看
+
+防火墙看自己网络环境， 不用的话关掉， systemctl stop firewalld
+下载地址：
+
+https://www.zabbix.com/cn/download?zabbix=5.0&os_distribution=centos&os_version=7&db=mysql&ws=nginx
+我选择5.0版本
+（官方，第2部分有安装步骤，照这个步骤走）
+在这里插入图片描述
+1.安装监控工具数据库，网站等库
+1.获取zabbix下载源
+
+rpm -Uvh https://repo.zabbix.com/zabbix/5.0/rhel/7/x86_64/zabbix-release-5.0-1.el7.noarch.rpm
+使用zabbix官方源比较慢，换成阿里源
+2. 更改zabbix.repo源，为阿里的
+
+sed -i 's#http://repo.zabbix.com#https://mirrors.aliyun.com/zabbix#' /etc/yum/repos.d/zabbix.repo
+替换 /etc/yum.repos .d/zabbix.repo 文件里的 http://repo.zabbix.com 为 https://mirrors.aliyun.com/zabbix
+3. 清理yum缓存
+
+yum clean all
+在这里插入图片描述
+4. 安装zabbix server和agent
+
+yum install zabbix-server-mysql zabbix-agent -y
+
+在这里插入图片描述
+5. 安装scl工具，可以在一个操作系统上安装和使用多个版本的软件，不会影响到整个系统的依赖环境
+
+yum install centos-release-scl -y
+scL(Software Collections)可以让你在同一个操作系统上安装和使用多个版本的软件，而不会影响整个系统的安装包。
+软件包会安装在/opt/rh目录下
+在这里插入图片描述
+6. 修改zabbix前端源参数
+
+vim /etc/yum.repos.d/zabbix.repo
+
+[zabbix-frontend]
+name=Zabbix Official Repository frontend - $basearch
+baseurl=https://mirrors.aliyun.com/zabbix/zabbix/5.0/rhel/7/$basearch/frontend
+enabled=`1`        `将0 改为1`
+gpgcheck=1
+gpgkey=file: /lletc/pki/rpm-gpg/RPM-GPG-KEY-ZABBIX-A14FE591
+
+    1
+    2
+    3
+    4
+    5
+    6
+
+7. 安装zabbix前端环境，且安装在scl环境下
+
+yum install zabbix-web-mysql-scl zabbix-nginx-conf-scl
+8. 安装zabbix所需数据库， 用centos7 自带的mariadb
+
+yum install mariadb-server -y
+9. 配置数据库
+
+#systemctl enable --now mariadb 立即启动并设置开机自启
+#mysql_secure_installation 初始化数据库
+Enter current password for root (enter for none): 输入当前root密码， 默认为空;enter
+Set root password? [Y/n] 设置root密码 y
+New passwoed:
+Re-enter new password:
+……
+Success！
+……
+Remove anonymous users? [Y/n] 删除匿名用户 y
+Disallow root login remotely? [Y/n] 不允许root远程登录 n
+Remove test database and access to it？ [Y/n] 删除测试数据库 y
+Reload privilege tables now? [Y/n] 刷新授权 y
+
+#mysql -uroot -p
+10. 添加/配置数据库用户，以及zabbix所需信息
+
+#mysql -uroot -p
+mysql> create database zabbix character set utf8 collate utf8_bin;
+在这里插入图片描述
+创建zabbix用户，设置密码为123456
+mysql> create user zabbix@localhost identified by '123456' ;
+授权，zabbix用户，目标zabbix里所有的表 *
+mysql> grant all privileges on zabbix.* to zabbix@localhost;
+刷新授权
+mysql> flush privileges;
+退出mysql
+mysql> exit;
+11. 使用zabbix-mysql命令，在 Zabbix 服务器主机上导入初始模式和数据。系统会提示您输入新创建的密码。
+
+zcat /usr/share/doc/zabbix-server-mysql*/create.sql.gz | mysql -uzabbix -p zabbix
+mysql -u用户名 -p 数据库名 ，加入密码设置为123456在这里插入图片描述mysql -uzabbix -p123456 登录zabbix数据库
+12. 修改zabbix-server 配置文件，修改数据库密码
+
+vim /etc/zabbix/zabbix_server.conf
+在这里插入图片描述
+13. 修改zabbix的php配置文件
+
+vim /etc/opt/rh/rh-nginx116/nginx/conf.d/zabbix.conf
+listen 80;
+server_name zabbix.88.com
+
+在这里插入图片描述
+vim /etc/opt/rh/rh-php72/php-fpm.d/zabbix.conf
+listen.acl_users = apache,nginx
+php_value[date.timezone] = Asia/Shanghai (前面的封号是注释)
+在这里插入图片描述
+未设置对会报错哦！“Time zone for PHP is not set (configuration parameter “date.timezone”).”
+14. 启动zabbix相关服务器
+
+systemctl restart zabbix-server zabbix-agent httpd rh-php72-php-fpm
+systemctl enable zabbix-server zabbix-agent httpd rh-php72-php-fpm
+15. 所有配置好后， 在本地hosts文件里添加解析
+
+{不添加解析的话，浏览器访问时候为：ip/zabbix/index.php}
+本地电脑上，win+r，输入drivers，enter，进etc目录，修改hosts文件，添加解析格式如下。在这里插入图片描述
+在这里插入图片描述Next step
+在这里插入图片描述
+Next step
+
+在这里插入图片描述
+在这里插入图片描述
+在这里插入图片描述在这里插入图片描述
+
+默认的用户名是“Admin”，密码“zabbix”
+
+在这里插入图片描述
+然后就进去啦
+在这里插入图片描述
+zabbix配置中文界面
+
+usee settings -->user --> Language --> chinese --> update
+在这里插入图片描述
+在这里插入图片描述
+在这里插入图片描述
